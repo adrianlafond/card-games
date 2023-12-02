@@ -6,36 +6,42 @@ export class HoldEm {
 
   constructor (options?: HoldEmConstructor) {
     const deck = shuffle()
-    const players = this.definePlayers(deck, options?.players)
     const smallBlind = options?.smallBlind ?? (options?.largeBlind != null ? options.largeBlind / 2 : 1)
     const largeBlind = options?.largeBlind ?? (options?.smallBlind != null ? options.smallBlind * 2 : 2)
     const limit = options?.limit ?? 'none'
+    const players = this.definePlayers(deck, options?.players)
+    players[0].purse = Math.max(0, players[0].purse - smallBlind)
+    players[1].purse = Math.max(0, players[1].purse - largeBlind)
     this.state = {
       deck,
       players,
       currentPlayer: 2 % players.length,
       pots: [{
         players: [0, 1],
-        amount: 0
+        amount: smallBlind + largeBlind
       }],
       phase: 'preflop',
       minBet: this.getMinBet(limit, largeBlind),
       maxBet: this.getMaxBet(limit, largeBlind, smallBlind + largeBlind),
-      community: [takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck)],
+      communityCards: [takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck)],
       smallBlind,
       largeBlind,
       limit
     }
   }
 
+  getCardsForPlayer (player: number): [CardKey, CardKey] | null {
+    return this.state.players[player] ? [...this.state.players[player].cards] : null
+  }
+
   getState (): ActionState {
-    let community: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?] = []
+    let communityCards: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?] = []
     if (this.state.phase === 'flop') {
-      community = [this.state.community[0], this.state.community[1], this.state.community[2]]
+      communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2]]
     } else if (this.state.phase === 'turn') {
-      community = [this.state.community[0], this.state.community[1], this.state.community[2], this.state.community[3]]
+      communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3]]
     } else if (this.state.phase === 'river' || this.state.phase === 'showdown') {
-      community = [this.state.community[0], this.state.community[1], this.state.community[2], this.state.community[3], this.state.community[4]]
+      communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3], this.state.communityCards[4]]
     }
     return {
       currentPlayer: this.state.currentPlayer,
@@ -50,7 +56,8 @@ export class HoldEm {
       phase: this.state.phase,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
-      community
+      communityCards,
+      events: [],
     }
   }
 

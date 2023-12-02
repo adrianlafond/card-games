@@ -27,6 +27,14 @@ export interface PlayerAction {
   amount: number
 }
 
+export interface Event {
+  success?: PlayerAction & { player: number },
+  error?: PlayerAction & {
+    player: number
+    message: string
+  }
+}
+
 export interface Pot {
   /**
    * Array of indexes of players still eligible to win this pot.
@@ -54,10 +62,8 @@ export interface BaseState {
  * The state of the game shared with players.
  */
 export interface ActionState extends BaseState {
-  community: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?]
-  action?: PlayerAction & {
-    player: number
-  }
+  communityCards: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?]
+  events: Event[],
   players: BasePlayer[]
 }
 
@@ -66,7 +72,7 @@ export interface ActionState extends BaseState {
  */
 export interface State extends BaseState {
   deck: Deck
-  community: [CardKey, CardKey, CardKey, CardKey, CardKey]
+  communityCards: [CardKey, CardKey, CardKey, CardKey, CardKey]
   smallBlind: number
   largeBlind: number
   limit: 'none' | 'fixed' | 'pot'
