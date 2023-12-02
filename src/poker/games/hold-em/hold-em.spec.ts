@@ -25,7 +25,7 @@ describe('Hold\'em poker', () => {
       expect(state.pots[0].players).toEqual([0, 1])
       expect(state.pots[0].amount).toEqual(3)
     })
-    it('makes min and max bet amounts be "no limit" by default', () => {
+    it('makes bet amount be "no limit" by default', () => {
       expect(state.minBet).toBe(4)
       expect(state.maxBet).toBe(Number.MAX_VALUE)
     })
@@ -52,6 +52,31 @@ describe('Hold\'em poker', () => {
       expect(state.players[0].purse).toBe(92)
       expect(state.players[1].purse).toBe(84)
       expect(state.pots[0].amount).toBe(24)
+    })
+  })
+  describe('betting limits', () => {
+    describe('none', () => {
+      it('makes the min bet be twice the large blind', () => {
+        const state = new HoldEm({ largeBlind: 10, limit: 'none' }).getState()
+        expect(state.minBet).toBe(20)
+      })
+    })
+    describe('fixed', () => {
+      it('makes both the min and max bet be twice the large blind', () => {
+        const state = new HoldEm({ largeBlind: 10, limit: 'fixed' }).getState()
+        expect(state.minBet).toBe(20)
+        expect(state.maxBet).toBe(20)
+      })
+    })
+    describe('pot', () => {
+      it('makes the min bet as large as the large blind', () => {
+        const state = new HoldEm({ largeBlind: 10, limit: 'pot' }).getState()
+        expect(state.minBet).toBe(10)
+      })
+      it('makes the max bet as large as the pot', () => {
+        const state = new HoldEm({ smallBlind: 5, largeBlind: 10, limit: 'pot' }).getState()
+        expect(state.maxBet).toBe(15)
+      })
     })
   })
 })
