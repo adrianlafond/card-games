@@ -28,7 +28,7 @@ export interface PlayerAction {
 }
 
 export interface Event {
-  success?: PlayerAction & { player: number },
+  success?: PlayerAction & { player: number }
   error?: PlayerAction & {
     player: number
     message: string
@@ -54,7 +54,7 @@ export interface BaseState {
   currentPlayer: number
   pots: Pot[]
   phase: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
-  maxRaisesPerRound: number;
+  maxRaisesPerRound: number
   minBet: number
   maxBet: number
 }

@@ -1,3 +1,4 @@
+import { errors } from './errors'
 import { HoldEm } from './hold-em'
 import { ActionState } from './hold-em.types'
 
@@ -143,6 +144,18 @@ describe('Hold\'em poker', () => {
           expect(player.purse).toBe(intendedPlayers[index].purse)
         }
       })
+    })
+  })
+  describe('game play', () => {
+    it('returns an error if bet is less than the min bet', () => {
+      const hand = new HoldEm()
+      const result = hand.act({ action: 'bet', amount: 2 })
+      expect(result.error?.message).toBe(errors.lessThanMinBet.replace('$1', `${hand.getState().minBet}`))
+    })
+    it('returns an error if bet is greater than the max bet', () => {
+      const hand = new HoldEm({ limit: 'fixed' })
+      const result = hand.act({ action: 'bet', amount: 999 })
+      expect(result.error?.message).toBe(errors.greaterThanMaxBet.replace('$1', `${hand.getState().maxBet}`))
     })
   })
 })

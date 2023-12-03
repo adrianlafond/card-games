@@ -1,12 +1,13 @@
 import { takeCard, shuffle, Deck, CardKey } from '../../../cards'
-import { ActionState, HoldEmConstructor, Player, State } from './hold-em.types'
+import { errors } from './errors'
+import { ActionState, HoldEmConstructor, Player, PlayerAction, State } from './hold-em.types'
 
 export class HoldEm {
   private readonly state: State
 
   constructor (options?: HoldEmConstructor) {
     const deck = shuffle()
-    const [smallBlind, largeBlind] = this.getBlinds(options)
+    const [smallBlind, largeBlind] = this.defineBlinds(options)
     const limit = options?.limit ?? 'none'
     const players = this.definePlayers(deck, options?.players)
     players[0].purse = Math.max(0, players[0].purse - smallBlind)
@@ -21,8 +22,8 @@ export class HoldEm {
       }],
       phase: 'preflop',
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
-      minBet: this.getMinBet(limit, largeBlind),
-      maxBet: this.getMaxBet(limit, largeBlind, smallBlind + largeBlind),
+      minBet: this.defineMinBet(limit, largeBlind),
+      maxBet: this.defineMaxBet(limit, largeBlind, smallBlind + largeBlind),
       communityCards: this.drawCommunityCards(deck),
       smallBlind,
       largeBlind,
@@ -31,7 +32,7 @@ export class HoldEm {
   }
 
   getCardsForPlayer (player: number): [CardKey, CardKey] | null {
-    return this.state.players[player] ? [...this.state.players[player].cards] : null
+    return player in this.state.players ? [...this.state.players[player].cards] : null
   }
 
   getState (): ActionState {
@@ -57,8 +58,24 @@ export class HoldEm {
       maxRaisesPerRound: this.state.maxRaisesPerRound,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
-      communityCards,
+      communityCards
     }
+  }
+
+  act (action: PlayerAction): ActionState {
+    const result = this.getState()
+    if ((action.action === 'raise' || action.action === 'bet')) {
+      if (action.amount < this.state.minBet) {
+        result.error = {
+          message: errors.lessThanMinBet.replace('$1', `${this.state.minBet}`)
+        }
+      } else if (action.amount > this.state.maxBet) {
+        result.error = {
+          message: errors.greaterThanMaxBet.replace('$1', `${this.state.maxBet}`)
+        }
+      }
+    }
+    return result
   }
 
   private definePlayers (deck: Deck, optionsPlayers?: HoldEmConstructor['players']): Player[] {
@@ -79,7 +96,7 @@ export class HoldEm {
     }
   }
 
-  private getBlinds(options?: HoldEmConstructor): [number, number] {
+  private defineBlinds (options?: HoldEmConstructor): [number, number] {
     const blinds: [number, number] = [0, 0]
     if (options?.smallBlind != null) {
       blinds[0] = Math.max(0, options?.smallBlind)
@@ -98,14 +115,14 @@ export class HoldEm {
     return blinds
   }
 
-  private getMinBet (limit: State['limit'], blind: number): number {
+  private defineMinBet (limit: State['limit'], blind: number): number {
     if (limit === 'pot') {
       return blind
     }
     return blind * 2
   }
 
-  private getMaxBet (limit: State['limit'], blind: number, pot: number): number {
+  private defineMaxBet (limit: State['limit'], blind: number, pot: number): number {
     if (limit === 'pot') {
       return pot
     }
@@ -115,7 +132,7 @@ export class HoldEm {
     return Number.MAX_VALUE
   }
 
-  private drawCommunityCards(deck: Deck): State['communityCards'] {
+  private drawCommunityCards (deck: Deck): State['communityCards'] {
     const communityCards: Deck = []
     takeCard(deck) // burn
     communityCards.push(takeCard(deck)) // flop 1
