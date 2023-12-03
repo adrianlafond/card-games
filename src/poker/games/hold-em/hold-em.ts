@@ -6,8 +6,7 @@ export class HoldEm {
 
   constructor (options?: HoldEmConstructor) {
     const deck = shuffle()
-    const smallBlind = options?.smallBlind ?? (options?.largeBlind != null ? options.largeBlind / 2 : 1)
-    const largeBlind = options?.largeBlind ?? (options?.smallBlind != null ? options.smallBlind * 2 : 2)
+    const [smallBlind, largeBlind] = this.getBlinds(options)
     const limit = options?.limit ?? 'none'
     const players = this.definePlayers(deck, options?.players)
     players[0].purse = Math.max(0, players[0].purse - smallBlind)
@@ -21,9 +20,10 @@ export class HoldEm {
         amount: smallBlind + largeBlind
       }],
       phase: 'preflop',
+      maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
       minBet: this.getMinBet(limit, largeBlind),
       maxBet: this.getMaxBet(limit, largeBlind, smallBlind + largeBlind),
-      communityCards: [takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck), takeCard(deck)],
+      communityCards: this.drawCommunityCards(deck),
       smallBlind,
       largeBlind,
       limit
@@ -54,16 +54,16 @@ export class HoldEm {
         players: [...pot.players]
       })),
       phase: this.state.phase,
+      maxRaisesPerRound: this.state.maxRaisesPerRound,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
       communityCards,
-      events: [],
     }
   }
 
   private definePlayers (deck: Deck, optionsPlayers?: HoldEmConstructor['players']): Player[] {
-    const players: Player[] = (optionsPlayers != null ? optionsPlayers?.slice(0, 23) : []).map(
-      item => this.createPlayer(deck, item.purse)
+    const players: Player[] = (optionsPlayers != null ? optionsPlayers.slice(0, 22) : []).map(
+      item => this.createPlayer(deck, item?.purse)
     )
     while (players.length < 2) {
       players.push(this.createPlayer(deck))
@@ -77,6 +77,25 @@ export class HoldEm {
       purse: purse ?? 100,
       active: true
     }
+  }
+
+  private getBlinds(options?: HoldEmConstructor): [number, number] {
+    const blinds: [number, number] = [0, 0]
+    if (options?.smallBlind != null) {
+      blinds[0] = Math.max(0, options?.smallBlind)
+    } else if (options?.largeBlind != null && options.largeBlind > 0) {
+      blinds[0] = Math.max(0, options.largeBlind) / 2
+    } else {
+      blinds[0] = 1
+    }
+    if (options?.largeBlind != null) {
+      blinds[1] = Math.max(0, options?.largeBlind)
+    } else if (options?.smallBlind != null && options.smallBlind > 0) {
+      blinds[1] = Math.max(0, options.smallBlind) * 2
+    } else {
+      blinds[1] = 2
+    }
+    return blinds
   }
 
   private getMinBet (limit: State['limit'], blind: number): number {
@@ -94,5 +113,18 @@ export class HoldEm {
       return blind * 2
     }
     return Number.MAX_VALUE
+  }
+
+  private drawCommunityCards(deck: Deck): State['communityCards'] {
+    const communityCards: Deck = []
+    takeCard(deck) // burn
+    communityCards.push(takeCard(deck)) // flop 1
+    communityCards.push(takeCard(deck)) // flop 2
+    communityCards.push(takeCard(deck)) // flop 3
+    takeCard(deck) // burn
+    communityCards.push(takeCard(deck)) // turn
+    takeCard(deck) // burn
+    communityCards.push(takeCard(deck)) // river
+    return communityCards as State['communityCards']
   }
 }

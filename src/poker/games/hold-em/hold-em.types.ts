@@ -54,6 +54,7 @@ export interface BaseState {
   currentPlayer: number
   pots: Pot[]
   phase: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
+  maxRaisesPerRound: number;
   minBet: number
   maxBet: number
 }
@@ -63,8 +64,8 @@ export interface BaseState {
  */
 export interface ActionState extends BaseState {
   communityCards: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?]
-  events: Event[],
   players: BasePlayer[]
+  error?: { message: string }
 }
 
 /**
@@ -107,4 +108,9 @@ export interface HoldEmConstructor {
    * or else 2.
    */
   largeBlind?: number
+
+  /**
+   * Maximum number of raises per betting round. The default is 3.
+   */
+  maxRaisesPerRound?: number
 }
