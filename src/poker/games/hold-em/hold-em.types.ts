@@ -10,6 +10,14 @@ export interface BasePlayer {
    * Whether the player is still playing in this hand (has not folded).
    */
   active: boolean
+
+  /**
+   * The player's current bet, as opposed to the current bet of the hand. For
+   * example, if the small blind is 5 and the large blind is 10 then the first
+   * player's currentBet is 5 and the global currentBet is 10. So the first
+   * player must either fold or call with 5 to bring their currentBet up to 10.
+   */
+  currentBet: number
 }
 
 export interface Player extends BasePlayer {
@@ -24,7 +32,7 @@ export interface Player extends BasePlayer {
  */
 export interface PlayerAction {
   action: 'check' | 'bet' | 'call' | 'raise' | 'fold'
-  amount: number
+  amount?: number
 }
 
 export interface Event {
@@ -52,11 +60,16 @@ export interface Pot {
  */
 export interface BaseState {
   currentPlayer: number
+  currentBet: number
   pots: Pot[]
-  phase: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
+  phase: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'complete'
   maxRaisesPerRound: number
   minBet: number
   maxBet: number
+}
+
+export interface ActionError {
+  message: string
 }
 
 /**
@@ -65,7 +78,8 @@ export interface BaseState {
 export interface ActionState extends BaseState {
   communityCards: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?]
   players: BasePlayer[]
-  error?: { message: string }
+  raiseAllowed: boolean
+  error?: ActionError
 }
 
 /**
@@ -77,6 +91,8 @@ export interface State extends BaseState {
   smallBlind: number
   largeBlind: number
   limit: 'none' | 'fixed' | 'pot'
+  explicitBetMade: boolean
+  raisesMade: number
   players: Player[]
 }
 

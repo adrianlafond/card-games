@@ -1,6 +1,7 @@
 import { takeCard, shuffle, Deck, CardKey } from '../../../cards'
+import { DEFAULT_LARGE_BLIND, DEFAULT_PLAYER_PURSE, DEFAULT_SMALL_BLIND } from './constants'
 import { errors } from './errors'
-import { ActionState, HoldEmConstructor, Player, PlayerAction, State } from './hold-em.types'
+import { ActionError, ActionState, HoldEmConstructor, Player, PlayerAction, State } from './hold-em.types'
 
 export class HoldEm {
   private readonly state: State
@@ -10,12 +11,15 @@ export class HoldEm {
     const [smallBlind, largeBlind] = this.defineBlinds(options)
     const limit = options?.limit ?? 'none'
     const players = this.definePlayers(deck, options?.players)
+    players[0].currentBet = smallBlind
+    players[1].currentBet = largeBlind
     players[0].purse = Math.max(0, players[0].purse - smallBlind)
     players[1].purse = Math.max(0, players[1].purse - largeBlind)
     this.state = {
       deck,
       players,
       currentPlayer: 2 % players.length,
+      currentBet: largeBlind,
       pots: [{
         players: [0, 1],
         amount: smallBlind + largeBlind
@@ -27,6 +31,8 @@ export class HoldEm {
       communityCards: this.drawCommunityCards(deck),
       smallBlind,
       largeBlind,
+      explicitBetMade: false,
+      raisesMade: 0,
       limit
     }
   }
@@ -46,7 +52,9 @@ export class HoldEm {
     }
     return {
       currentPlayer: this.state.currentPlayer,
+      currentBet: this.state.currentBet,
       players: this.state.players.map(player => ({
+        currentBet: player.currentBet,
         purse: player.purse,
         active: player.active
       })),
@@ -58,23 +66,107 @@ export class HoldEm {
       maxRaisesPerRound: this.state.maxRaisesPerRound,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
+      raiseAllowed: true,
       communityCards
     }
   }
 
   act (action: PlayerAction): ActionState {
-    const result = this.getState()
-    if ((action.action === 'raise' || action.action === 'bet')) {
-      if (action.amount < this.state.minBet) {
-        result.error = {
-          message: errors.lessThanMinBet.replace('$1', `${this.state.minBet}`)
-        }
-      } else if (action.amount > this.state.maxBet) {
-        result.error = {
-          message: errors.greaterThanMaxBet.replace('$1', `${this.state.maxBet}`)
-        }
+    switch (action.action) {
+      case 'fold':
+        return this.getState()
+      case 'check':
+        return this.processCheck()
+      case 'call':
+        return this.processCall()
+      case 'bet':
+        return this.processBet(action?.amount)
+      case 'raise':
+        return this.processRaise(action?.amount)
+      default:
+        return this.getState()
+    }
+  }
+
+  private processCheck (): ActionState {
+    const errorResult = this.generateCheckError()
+    if (errorResult != null) {
+      return errorResult
+    }
+    return this.getState()
+  }
+
+  private generateCheckError (): ActionState | null {
+    if (this.state.currentBet > 0) {
+      return this.getErrorResult({ message: errors.checkNotAllowed })
+    }
+    return null
+  }
+
+  private processCall (): ActionState {
+    const errorResult = this.generateCallError()
+    if (errorResult != null) {
+      return errorResult
+    }
+    const currentPlayer = this.state.players[this.state.currentPlayer]
+    const callAmount = this.state.currentBet - currentPlayer.currentBet
+    currentPlayer.currentBet += callAmount
+    currentPlayer.purse -= callAmount
+    this.state.pots[this.state.pots.length - 1].amount += callAmount
+    this.state.currentPlayer = (this.state.currentPlayer + 1) % this.state.players.length
+    return this.getState()
+  }
+
+  private generateCallError (): ActionState | null {
+    return null
+  }
+
+  private processBet (amount?: number): ActionState {
+    const errorResult = this.generateBetOrRaiseError(amount)
+    if (errorResult != null) {
+      return errorResult
+    }
+    return this.getState()
+  }
+
+  private processRaise (amount?: number): ActionState {
+    const errorResult = this.generateBetOrRaiseError(amount)
+    if (errorResult != null) {
+      return errorResult
+    }
+    const requiredAmount = amount ?? 0
+    const currentPlayer = this.state.players[this.state.currentPlayer]
+    const callAmount = this.state.currentBet - currentPlayer.currentBet
+
+    if (requiredAmount < callAmount + this.state.minBet) {
+      const errorResult = this.generateBetOrRaiseError(0)
+      if (errorResult) {
+        return errorResult
       }
     }
+
+    currentPlayer.currentBet += requiredAmount
+    currentPlayer.purse -= requiredAmount
+    this.state.pots[this.state.pots.length - 1].amount += requiredAmount
+    this.state.currentPlayer = (this.state.currentPlayer + 1) % this.state.players.length
+    return this.getState()
+  }
+
+  private generateBetOrRaiseError (amount?: number): ActionState | null {
+    if (amount == null) {
+      return this.getErrorResult({ message: errors.missingAmount })
+    }
+    if (amount < this.state.minBet) {
+      return this.getErrorResult({ message: errors.lessThanMinBet.replace('$1', `${this.state.minBet}`) })
+    } else if (amount > this.state.maxBet) {
+      return this.getErrorResult({ message: errors.greaterThanMaxBet.replace('$1', `${this.state.maxBet}`) })
+    }
+    return null
+  }
+
+  private getErrorResult (error: ActionError): ActionState {
+    const result = this.getState()
+    result.error = error
     return result
   }
 
@@ -91,7 +183,8 @@ export class HoldEm {
   private createPlayer (deck: Deck, purse?: number): Player {
     return {
       cards: [takeCard(deck), takeCard(deck)],
-      purse: purse ?? 100,
+      purse: purse ?? DEFAULT_PLAYER_PURSE,
+      currentBet: 0,
       active: true
     }
   }
@@ -103,15 +196,16 @@ export class HoldEm {
     } else if (options?.largeBlind != null && options.largeBlind > 0) {
       blinds[0] = Math.max(0, options.largeBlind) / 2
     } else {
-      blinds[0] = 1
+      blinds[0] = DEFAULT_SMALL_BLIND
     }
     if (options?.largeBlind != null) {
       blinds[1] = Math.max(0, options?.largeBlind)
     } else if (options?.smallBlind != null && options.smallBlind > 0) {
       blinds[1] = Math.max(0, options.smallBlind) * 2
     } else {
-      blinds[1] = 2
+      blinds[1] = DEFAULT_LARGE_BLIND
     }
+    blinds[1] = Math.max(blinds[0], blinds[1])
     return blinds
   }
 
