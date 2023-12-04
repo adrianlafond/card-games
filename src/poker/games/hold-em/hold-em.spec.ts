@@ -186,6 +186,19 @@ describe('Hold\'em poker', () => {
       const result = hand.act({ action: 'check' })
       expect(result.error?.message).toBe(errors.checkNotAllowed)
     })
+    it('updates the player state and pot on "fold"', () => {
+      const hand = new HoldEm()
+      const result = hand.act({ action: 'fold' })
+      expect(result.error).toBeUndefined()
+      expect(result.players[0].purse).toBe(DEFAULT_PLAYER_PURSE - DEFAULT_SMALL_BLIND)
+      expect(result.pots[0].amount).toBe(DEFAULT_SMALL_BLIND + DEFAULT_LARGE_BLIND)
+      expect(result.pots[0].players).toEqual([1])
+    })
+    it('ends the hand when only one player has not folded', () => {
+      const hand = new HoldEm()
+      hand.act({ action: 'fold' })
+      expect(hand.getState().phase).toBe('complete')
+    })
     it('updates the pot and player purse on successful "call"', () => {
       const hand = new HoldEm()
       const result = hand.act({ action: 'call' })

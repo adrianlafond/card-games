@@ -62,7 +62,7 @@ export interface BaseState {
   currentPlayer: number
   currentBet: number
   pots: Pot[]
-  phase: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'complete'
+  phase: 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
   maxRaisesPerRound: number
   minBet: number
   maxBet: number
@@ -91,8 +91,8 @@ export interface State extends BaseState {
   smallBlind: number
   largeBlind: number
   limit: 'none' | 'fixed' | 'pot'
-  explicitBetMade: boolean
   raisesMade: number
+  isPreflopFirstPass: boolean
   players: Player[]
 }
 

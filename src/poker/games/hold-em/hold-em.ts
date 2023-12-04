@@ -31,7 +31,7 @@ export class HoldEm {
       communityCards: this.drawCommunityCards(deck),
       smallBlind,
       largeBlind,
-      explicitBetMade: false,
+      isPreflopFirstPass: true,
       raisesMade: 0,
       limit
     }
@@ -47,7 +47,7 @@ export class HoldEm {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2]]
     } else if (this.state.phase === 'turn') {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3]]
-    } else if (this.state.phase === 'river' || this.state.phase === 'showdown') {
+    } else if (this.state.phase === 'river' || this.state.phase === 'complete') {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3], this.state.communityCards[4]]
     }
     return {
@@ -66,7 +66,7 @@ export class HoldEm {
       maxRaisesPerRound: this.state.maxRaisesPerRound,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
-      raiseAllowed: true,
+      raiseAllowed: this.state.raisesMade < this.state.maxRaisesPerRound,
       communityCards
     }
   }
@@ -74,7 +74,7 @@ export class HoldEm {
   act (action: PlayerAction): ActionState {
     switch (action.action) {
       case 'fold':
-        return this.getState()
+        return this.processFold()
       case 'check':
         return this.processCheck()
       case 'call':
@@ -88,11 +88,23 @@ export class HoldEm {
     }
   }
 
+  private processFold (): ActionState {
+    const currentPlayer = this.state.players[this.state.currentPlayer]
+    currentPlayer.active = false
+    this.state.pots.forEach(pot => {
+      const index = pot.players.findIndex(i => i === this.state.currentPlayer)
+      pot.players.splice(index, 1)
+    })
+    this.concludeAction()
+    return this.getState()
+  }
+
   private processCheck (): ActionState {
     const errorResult = this.generateCheckError()
     if (errorResult != null) {
       return errorResult
     }
+    this.concludeAction()
     return this.getState()
   }
 
@@ -113,7 +125,7 @@ export class HoldEm {
     currentPlayer.currentBet += callAmount
     currentPlayer.purse -= callAmount
     this.state.pots[this.state.pots.length - 1].amount += callAmount
-    this.state.currentPlayer = (this.state.currentPlayer + 1) % this.state.players.length
+    this.concludeAction()
     return this.getState()
   }
 
@@ -126,6 +138,7 @@ export class HoldEm {
     if (errorResult != null) {
       return errorResult
     }
+    this.concludeAction()
     return this.getState()
   }
 
@@ -140,7 +153,7 @@ export class HoldEm {
 
     if (requiredAmount < callAmount + this.state.minBet) {
       const errorResult = this.generateBetOrRaiseError(0)
-      if (errorResult) {
+      if (errorResult != null) {
         return errorResult
       }
     }
@@ -148,7 +161,7 @@ export class HoldEm {
     currentPlayer.currentBet += requiredAmount
     currentPlayer.purse -= requiredAmount
     this.state.pots[this.state.pots.length - 1].amount += requiredAmount
-    this.state.currentPlayer = (this.state.currentPlayer + 1) % this.state.players.length
+    this.concludeAction()
     return this.getState()
   }
 
@@ -162,6 +175,51 @@ export class HoldEm {
       return this.getErrorResult({ message: errors.greaterThanMaxBet.replace('$1', `${this.state.maxBet}`) })
     }
     return null
+  }
+
+  /**
+   * After an action has been taken successfully by a player (fold, call, bet,
+   * or raise), then the turn moves to the next player and the state of the hand
+   * is reviewed to determine if the phase sould updated (e.g., flop to turn) or
+   * if the hand is complete.
+   */
+  private concludeAction (): void {
+    if (this.state.players.filter(player => player.active).length === 1) {
+      // Complete the hand if only 1 player left.
+      this.state.phase = 'complete'
+    }
+    const prevCurrentPlayer = this.state.currentPlayer
+    this.makeNextPlayerCurrent()
+    if (this.state.currentPlayer < prevCurrentPlayer) {
+      const playersNeedChanceToCall = this.state.players.some(player => player.active && player.currentBet < this.state.currentBet)
+      if (playersNeedChanceToCall || this.state.isPreflopFirstPass) {
+        this.state.isPreflopFirstPass = false
+      } else if (this.state.phase === 'preflop') {
+        this.state.phase = 'flop'
+      } else if (this.state.phase === 'flop') {
+        this.state.phase = 'turn'
+      } else if (this.state.phase === 'turn') {
+        this.state.phase = 'river'
+      } else if (this.state.phase === 'river') {
+        this.state.phase = 'complete'
+        // shown > compare hands, remove losers from pots
+      }
+    }
+  }
+
+  /**
+   * If hand is still being played, pass the turn to the next player who is still active.
+   */
+  private makeNextPlayerCurrent (): void {
+    if (this.state.phase !== 'complete') {
+      const n = (this.state.currentPlayer + 1) % this.state.players.length
+      while (n !== this.state.currentPlayer) {
+        if (this.state.players[n].active) {
+          this.state.currentPlayer = n
+          break
+        }
+      }
+    }
   }
 
   private getErrorResult (error: ActionError): ActionState {
