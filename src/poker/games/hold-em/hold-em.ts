@@ -10,6 +10,7 @@ export class HoldEm {
     const deck = shuffle()
     const [smallBlind, largeBlind] = this.defineBlinds(options)
     const limit = options?.limit ?? 'none'
+    const [minBet, maxBet] = this.defineBetLimits(limit, smallBlind, largeBlind, options)
     const players = this.definePlayers(deck, options?.players)
     players[0].currentBet = smallBlind
     players[1].currentBet = largeBlind
@@ -18,16 +19,16 @@ export class HoldEm {
     this.state = {
       deck,
       players,
-      currentPlayer: 2 % players.length,
-      currentBet: largeBlind,
+      currentPlayer: options?.currentPlayer ?? 2 % players.length,
+      currentBet: options?.currentBet ?? largeBlind,
       pots: [{
         players: [0, 1],
         amount: smallBlind + largeBlind
       }],
-      phase: 'preflop',
+      round: options?.round ?? 'preflop',
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
-      minBet: this.defineMinBet(limit, largeBlind),
-      maxBet: this.defineMaxBet(limit, largeBlind, smallBlind + largeBlind),
+      minBet,
+      maxBet,
       communityCards: this.drawCommunityCards(deck),
       smallBlind,
       largeBlind,
@@ -35,6 +36,7 @@ export class HoldEm {
       raisesMade: 0,
       limit
     }
+    this.checkInitialSetup()
   }
 
   getCardsForPlayer (player: number): [CardKey, CardKey] | null {
@@ -43,11 +45,11 @@ export class HoldEm {
 
   getState (): ActionState {
     let communityCards: [CardKey?, CardKey?, CardKey?, CardKey?, CardKey?] = []
-    if (this.state.phase === 'flop') {
+    if (this.state.round === 'flop') {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2]]
-    } else if (this.state.phase === 'turn') {
+    } else if (this.state.round === 'turn') {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3]]
-    } else if (this.state.phase === 'river' || this.state.phase === 'complete') {
+    } else if (this.state.round === 'river' || this.state.round === 'complete') {
       communityCards = [this.state.communityCards[0], this.state.communityCards[1], this.state.communityCards[2], this.state.communityCards[3], this.state.communityCards[4]]
     }
     return {
@@ -62,8 +64,7 @@ export class HoldEm {
         ...pot,
         players: [...pot.players]
       })),
-      phase: this.state.phase,
-      maxRaisesPerRound: this.state.maxRaisesPerRound,
+      round: this.state.round,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
       raiseAllowed: this.state.raisesMade < this.state.maxRaisesPerRound,
@@ -180,13 +181,13 @@ export class HoldEm {
   /**
    * After an action has been taken successfully by a player (fold, call, bet,
    * or raise), then the turn moves to the next player and the state of the hand
-   * is reviewed to determine if the phase sould updated (e.g., flop to turn) or
+   * is reviewed to determine if the round sould updated (e.g., flop to turn) or
    * if the hand is complete.
    */
   private concludeAction (): void {
     if (this.state.players.filter(player => player.active).length === 1) {
       // Complete the hand if only 1 player left.
-      this.state.phase = 'complete'
+      this.state.round = 'complete'
     }
     const prevCurrentPlayer = this.state.currentPlayer
     this.makeNextPlayerCurrent()
@@ -194,14 +195,14 @@ export class HoldEm {
       const playersNeedChanceToCall = this.state.players.some(player => player.active && player.currentBet < this.state.currentBet)
       if (playersNeedChanceToCall || this.state.isPreflopFirstPass) {
         this.state.isPreflopFirstPass = false
-      } else if (this.state.phase === 'preflop') {
-        this.state.phase = 'flop'
-      } else if (this.state.phase === 'flop') {
-        this.state.phase = 'turn'
-      } else if (this.state.phase === 'turn') {
-        this.state.phase = 'river'
-      } else if (this.state.phase === 'river') {
-        this.state.phase = 'complete'
+      } else if (this.state.round === 'preflop') {
+        this.state.round = 'flop'
+      } else if (this.state.round === 'flop') {
+        this.state.round = 'turn'
+      } else if (this.state.round === 'turn') {
+        this.state.round = 'river'
+      } else if (this.state.round === 'river') {
+        this.state.round = 'complete'
         // shown > compare hands, remove losers from pots
       }
     }
@@ -211,7 +212,7 @@ export class HoldEm {
    * If hand is still being played, pass the turn to the next player who is still active.
    */
   private makeNextPlayerCurrent (): void {
-    if (this.state.phase !== 'complete') {
+    if (this.state.round !== 'complete') {
       const n = (this.state.currentPlayer + 1) % this.state.players.length
       while (n !== this.state.currentPlayer) {
         if (this.state.players[n].active) {
@@ -230,7 +231,7 @@ export class HoldEm {
 
   private definePlayers (deck: Deck, optionsPlayers?: HoldEmConstructor['players']): Player[] {
     const players: Player[] = (optionsPlayers != null ? optionsPlayers.slice(0, 22) : []).map(
-      item => this.createPlayer(deck, item?.purse)
+      item => this.createPlayer(deck, item)
     )
     while (players.length < 2) {
       players.push(this.createPlayer(deck))
@@ -238,12 +239,12 @@ export class HoldEm {
     return players
   }
 
-  private createPlayer (deck: Deck, purse?: number): Player {
+  private createPlayer (deck: Deck, optionPlayer?: Partial<Player>): Player {
     return {
-      cards: [takeCard(deck), takeCard(deck)],
-      purse: purse ?? DEFAULT_PLAYER_PURSE,
-      currentBet: 0,
-      active: true
+      cards: [optionPlayer?.cards?.[0] ?? takeCard(deck), optionPlayer?.cards?.[1] ?? takeCard(deck)],
+      purse: optionPlayer?.purse ?? DEFAULT_PLAYER_PURSE,
+      currentBet: optionPlayer?.currentBet ?? 0,
+      active: optionPlayer?.active ?? true
     }
   }
 
@@ -267,21 +268,25 @@ export class HoldEm {
     return blinds
   }
 
-  private defineMinBet (limit: State['limit'], blind: number): number {
-    if (limit === 'pot') {
-      return blind
+  private defineBetLimits(limit: State['limit'], smallBlind: number, largeBlind: number, options?: HoldEmConstructor): [number, number] {
+    let minBet = 0
+    let maxBet = Number.MAX_VALUE
+    if (options?.minBet != null) {
+      minBet = Math.max(0, options.minBet)
+    } else if (limit === 'pot') {
+      minBet = largeBlind
+    } else if (limit === 'fixed' || limit === 'none') {
+      minBet = largeBlind * 2
     }
-    return blind * 2
-  }
-
-  private defineMaxBet (limit: State['limit'], blind: number, pot: number): number {
-    if (limit === 'pot') {
-      return pot
+    if (options?.maxBet != null) {
+      maxBet = Math.max(0, options.maxBet)
+    } else if (limit === 'pot') {
+      maxBet = smallBlind + largeBlind
+    } else if (limit === 'fixed') {
+      maxBet = largeBlind * 2
     }
-    if (limit === 'fixed') {
-      return blind * 2
-    }
-    return Number.MAX_VALUE
+    maxBet = Math.max(maxBet, minBet)
+    return [minBet, maxBet]
   }
 
   private drawCommunityCards (deck: Deck): State['communityCards'] {
@@ -295,5 +300,17 @@ export class HoldEm {
     takeCard(deck) // burn
     communityCards.push(takeCard(deck)) // river
     return communityCards as State['communityCards']
+  }
+
+  private checkInitialSetup() {
+    if (this.state.players[this.state.currentPlayer] == null) {
+      throw new Error(`The current player" index ${this.state.currentPlayer} does not exist.`)
+    }
+    if (!this.state.players[this.state.currentPlayer].active) {
+      throw new Error('The current player is no longer active.')
+    }
+    if (this.state.currentBet < 0) {
+      throw new Error('The current bet must be 0 or greater.')
+    }
   }
 }

@@ -62,8 +62,7 @@ export interface BaseState {
   currentPlayer: number
   currentBet: number
   pots: Pot[]
-  phase: 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
-  maxRaisesPerRound: number
+  round: 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
   minBet: number
   maxBet: number
 }
@@ -88,7 +87,22 @@ export interface ActionState extends BaseState {
 export interface State extends BaseState {
   deck: Deck
   communityCards: [CardKey, CardKey, CardKey, CardKey, CardKey]
+
+  /**
+   * Maximum number of raises per betting round. The default is 3.
+   */
+  maxRaisesPerRound: number
+
+  /**
+ * The small blind. If not defined, it will be either half the large blind or
+ * else 1.
+ */
   smallBlind: number
+
+  /**
+   * The large blind. If not defined, it will be either double the small blind
+   * or else 2.
+   */
   largeBlind: number
   limit: 'none' | 'fixed' | 'pot'
   raisesMade: number
@@ -99,34 +113,15 @@ export interface State extends BaseState {
 /**
  * Options passed to the HoldEm constructor when initializing a hand.
  */
-export interface HoldEmConstructor {
+export interface HoldEmConstructor extends Omit<Partial<State>, 'deck' | 'players'> {
   /**
    * The players, who will be referenced by index. If no purse is defined, the
    * default is 100. At least 2 players will be generated if less than 2 are defined.
    */
-  players?: Array<{
-    purse?: number
-  }>
+  players?: Partial<Player>[]
 
   /**
    * The type of betting limit for this hand. Default is "none".
    */
   limit?: 'none' | 'fixed' | 'pot'
-
-  /**
-   * The small blind. If not defined, it will be either half the large blind or
-   * else 1.
-   */
-  smallBlind?: number
-
-  /**
-   * The large blind. If not defined, it will be either double the small blind
-   * or else 2.
-   */
-  largeBlind?: number
-
-  /**
-   * Maximum number of raises per betting round. The default is 3.
-   */
-  maxRaisesPerRound?: number
 }

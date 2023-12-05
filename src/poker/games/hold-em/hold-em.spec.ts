@@ -1,7 +1,7 @@
 import { DEFAULT_LARGE_BLIND, DEFAULT_PLAYER_PURSE, DEFAULT_SMALL_BLIND } from './constants'
 import { errors } from './errors'
 import { HoldEm } from './hold-em'
-import { ActionState } from './hold-em.types'
+import { ActionState, HoldEmConstructor } from './hold-em.types'
 
 describe('Hold\'em poker', () => {
   describe('defaults', () => {
@@ -10,7 +10,7 @@ describe('Hold\'em poker', () => {
       state = new HoldEm().getState()
     })
     it('creates a new hand with 0 events', () => {
-      expect(state.phase).toBe('preflop')
+      expect(state.round).toBe('preflop')
       expect(state.communityCards.length).toBe(0)
     })
     it('creates 2 active players by default', () => {
@@ -33,8 +33,36 @@ describe('Hold\'em poker', () => {
       expect(state.minBet).toBe(DEFAULT_LARGE_BLIND * 2)
       expect(state.maxBet).toBe(Number.MAX_VALUE)
     })
-    it('allows maximum 3 raises per betting round', () => {
-      expect(state.maxRaisesPerRound).toBe(3)
+  })
+  describe('setup', () => {
+    const rounds: HoldEmConstructor['round'][] = ['preflop', 'flop', 'turn', 'river', 'complete']
+    rounds.forEach(round => {
+      it(`can be started at ${round}`, () => {
+        const state = new HoldEm({ round }).getState()
+        expect(state.round).toBe(round)
+      })
+    })
+    it('allows the min bet and max bet to be customized', () => {
+      const state = new HoldEm({ minBet: 37, maxBet: 77 }).getState()
+      expect(state.minBet).toBe(37)
+      expect(state.maxBet).toBe(77)
+    })
+    it('allows the current player to be customized', () => {
+      const state = new HoldEm({ currentPlayer: 1 }).getState()
+      expect(state.currentPlayer).toBe(1)
+    })
+    it('throws if the current player does not exist', () => {
+      expect(() => new HoldEm({ currentPlayer: 3 })).toThrow()
+    })
+    it('throws if the current player is not active', () => {
+      expect(() => new HoldEm({ currentPlayer: 0, players: [{ active: false }] })).toThrow()
+    })
+    it('allows the current bet to be customized', () => {
+      const state = new HoldEm({ currentBet: 999 }).getState()
+      expect(state.currentBet).toBe(999)
+    })
+    it('throws if the current bet is less than 0', () => {
+      expect(() => new HoldEm({ currentBet: -5 })).toThrow()
     })
   })
   describe('blinds', () => {
@@ -100,14 +128,7 @@ describe('Hold\'em poker', () => {
     })
   })
   describe('max raises', () => {
-    it('allows max raises per betting round to be customized', () => {
-      const state = new HoldEm({ maxRaisesPerRound: 999 }).getState()
-      expect(state.maxRaisesPerRound).toBe(999)
-    })
-    it('does not max raises per betting round to be less than 0', () => {
-      const state = new HoldEm({ maxRaisesPerRound: -5 }).getState()
-      expect(state.maxRaisesPerRound).toBe(0)
-    })
+    // TODO via actually making raises squentially
   })
   describe('betting limits', () => {
     describe('none', () => {
@@ -197,7 +218,7 @@ describe('Hold\'em poker', () => {
     it('ends the hand when only one player has not folded', () => {
       const hand = new HoldEm()
       hand.act({ action: 'fold' })
-      expect(hand.getState().phase).toBe('complete')
+      expect(hand.getState().round).toBe('complete')
     })
     it('updates the pot and player purse on successful "call"', () => {
       const hand = new HoldEm()
