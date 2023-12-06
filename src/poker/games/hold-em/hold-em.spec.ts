@@ -60,6 +60,13 @@ describe('Hold\'em poker', () => {
       const state = new HoldEm({ round: 'river' }).getState()
       expect(state.communityCards.length).toBe(5)
     })
+    it('allows community cards to be pre-selected', () => {
+      const state = new HoldEm({
+        communityCards: ['AC', 'AD', 'AH', 'AS', '2C'],
+        round: 'river',
+      }).getState()
+      expect(state.communityCards).toEqual(['AC', 'AD', 'AH', 'AS', '2C'])
+    })
     it('allows the min bet and max bet to be customized', () => {
       const state = new HoldEm({ minBet: 37, maxBet: 77 }).getState()
       expect(state.minBet).toBe(37)
@@ -83,11 +90,12 @@ describe('Hold\'em poker', () => {
       expect(() => new HoldEm({ currentBet: -5 })).toThrow()
     })
     it('allows players to be customized', () => {
-      const state = new HoldEm({
+      const hand = new HoldEm({
         largeBlind: 50,
-        players: [{}, { purse: 777, active: false }],
-      }).getState()
-      expect(state.players[1]).toEqual({ purse: 727, active: false, currentBet: 50 })
+        players: [{}, { cards: ['KH', '7D'], purse: 777, active: false }],
+      })
+      expect(hand.getState().players[1]).toEqual({ purse: 727, active: false, currentBet: 50 })
+      expect(hand.getCardsForPlayer(1)).toEqual(['KH', '7D'])
     })
     it('allows pots to be customized', () =>{
       const state = new HoldEm({

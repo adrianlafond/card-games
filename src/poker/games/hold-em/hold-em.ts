@@ -8,6 +8,7 @@ export class HoldEm {
 
   constructor (options?: HoldEmConstructor) {
     const deck = shuffle()
+    this.removePreselectedCards(deck)
     const [smallBlind, largeBlind] = this.defineBlinds(options)
     const limit = options?.limit ?? 'none'
     const [minBet, maxBet] = this.defineBetLimits(limit, smallBlind, largeBlind, options)
@@ -27,7 +28,7 @@ export class HoldEm {
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
       minBet,
       maxBet,
-      communityCards: this.drawCommunityCards(deck),
+      communityCards: this.drawCommunityCards(deck, options?.communityCards),
       smallBlind,
       largeBlind,
       isPreflopFirstPass: true,
@@ -312,17 +313,35 @@ export class HoldEm {
     return pots
   }
 
-  private drawCommunityCards (deck: Deck): State['communityCards'] {
+  private drawCommunityCards (deck: Deck, optionsCommunityCards?: Deck): State['communityCards'] {
     const communityCards: Deck = []
     takeCard(deck) // burn
-    communityCards.push(takeCard(deck)) // flop 1
-    communityCards.push(takeCard(deck)) // flop 2
-    communityCards.push(takeCard(deck)) // flop 3
+    communityCards.push(optionsCommunityCards?.[0] ?? takeCard(deck)) // flop 1
+    communityCards.push(optionsCommunityCards?.[1] ?? takeCard(deck)) // flop 2
+    communityCards.push(optionsCommunityCards?.[2] ?? takeCard(deck)) // flop 3
     takeCard(deck) // burn
-    communityCards.push(takeCard(deck)) // turn
+    communityCards.push(optionsCommunityCards?.[3] ?? takeCard(deck)) // turn
     takeCard(deck) // burn
-    communityCards.push(takeCard(deck)) // river
+    communityCards.push(optionsCommunityCards?.[4] ?? takeCard(deck)) // river
     return communityCards as State['communityCards']
+  }
+
+  private removePreselectedCards(deck: Deck, options?: HoldEmConstructor): void {
+    options?.communityCards?.forEach(card => {
+      this.removeCardFromDeck(deck, card)
+    })
+    options?.players?.forEach(player => {
+      player.cards?.forEach(card => {
+        this.removeCardFromDeck(deck, card)
+      })
+    })
+  }
+
+  private removeCardFromDeck(deck: Deck, card: CardKey): void {
+    const index = deck.findIndex(deckCard => deckCard === card)
+    if (index !== -1) {
+      deck.splice(index, 1)
+    }
   }
 
   private checkInitialSetup() {
