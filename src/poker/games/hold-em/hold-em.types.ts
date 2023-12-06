@@ -43,17 +43,10 @@ export interface Event {
   }
 }
 
-export interface Pot {
-  /**
-   * Array of indexes of players still eligible to win this pot.
-   */
-  players: number[]
-
-  /**
-   * Value of this pot.
-   */
-  amount: number
-}
+/**
+ * Amounts each player has contributed to this pot.
+ */
+export type Pot = number[]
 
 /**
  * Base state extended by ActionState and State.
@@ -113,12 +106,12 @@ export interface State extends BaseState {
 /**
  * Options passed to the HoldEm constructor when initializing a hand.
  */
-export interface HoldEmConstructor extends Omit<Partial<State>, 'deck' | 'players'> {
+export interface HoldEmConstructor extends Omit<Partial<State>, 'deck' | 'players' | 'pot'> {
   /**
    * The players, who will be referenced by index. If no purse is defined, the
    * default is 100. At least 2 players will be generated if less than 2 are defined.
    */
-  players?: Partial<Player>[]
+  players?: Partial<Omit<Player, 'currentBet'>>[]
 
   /**
    * The type of betting limit for this hand. Default is "none".
