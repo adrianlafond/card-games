@@ -55,13 +55,15 @@ export interface Event {
  */
 export type Pot = number[]
 
+export type Round = 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
+
 /**
  * Base state extended by ActionState and State.
  */
 export interface BaseState {
   currentPlayer: number
   pots: Pot[]
-  round: 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
+  round: Round
   minBet: number
   maxBet: number
 }

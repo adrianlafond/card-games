@@ -1,7 +1,7 @@
 import { takeCard, shuffle, Deck, CardKey } from '../../../cards'
 import { DEFAULT_LARGE_BLIND, DEFAULT_PLAYER_PURSE, DEFAULT_SMALL_BLIND } from './constants'
 import { errors } from './errors'
-import { ActionError, ActionState, HoldEmConstructor, Player, PlayerAction, Pot, State } from './hold-em.types'
+import { ActionError, ActionState, HoldEmConstructor, Player, PlayerAction, Pot, Round, State } from './hold-em.types'
 
 export class HoldEm {
   private readonly state: State
@@ -22,7 +22,7 @@ export class HoldEm {
       deck,
       players,
       currentPlayer: options?.currentPlayer ?? 2 % players.length,
-      pots: this.definePots(smallBlind, largeBlind, players, options?.pots),
+      pots: this.definePots(players, options?.pots),
       round,
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
       minBet,
@@ -48,7 +48,7 @@ export class HoldEm {
    * Returns the total amount in a pot by summing the bets contributed by each player.
    */
   getPotTotal (index: number): number {
-    return this.state.pots?.[index].reduce((sum, n) => sum + n, 0) || 0
+    return this.state.pots?.[index]?.reduce((sum, n) => sum + n, 0) || 0
   }
 
   getState (): ActionState {
@@ -130,7 +130,6 @@ export class HoldEm {
     currentPlayer.currentBet += callAmount
     currentPlayer.purse -= callAmount
     currentPlayer.chanceToBet = true
-    this.state.pots[this.state.pots.length - 1][this.state.currentPlayer] += callAmount
     this.concludeAction()
     return this.getState()
   }
@@ -169,7 +168,6 @@ export class HoldEm {
     currentPlayer.currentBet += requiredAmount
     currentPlayer.purse -= requiredAmount
     currentPlayer.chanceToBet = true
-    this.state.pots[this.state.pots.length - 1][this.state.currentPlayer] += requiredAmount
     this.concludeAction()
     return this.getState()
   }
@@ -203,16 +201,26 @@ export class HoldEm {
     this.makeNextPlayerCurrent()
 
     if (allChanceToBet && allCalled) {
-      if (this.state.round === 'preflop') {
-        this.state.round = 'flop'
-      } else if (this.state.round === 'flop') {
-        this.state.round = 'turn'
-      } else if (this.state.round === 'turn') {
-        this.state.round = 'river'
-      } else if (this.state.round === 'river') {
-        this.state.round = 'complete'
+      const rounds: Round[] = ['preflop', 'flop', 'turn', 'river', 'complete']
+      const currentRoundIndex = rounds.findIndex(round => round === this.state.round)
+      this.state.round = rounds[currentRoundIndex + 1]
+      this.gatherBetsIntoPots()
+      if (this.state.round === 'complete') {
         // shown > compare hands, remove losers from pots
       }
+    }
+  }
+
+  private gatherBetsIntoPots() {
+    let smallest = this.getSmallestBet()
+    while (smallest > 0) {
+      const pot = this.state.players.map(player => {
+        const deposit = player.currentBet > 0 ? smallest : 0;
+        player.currentBet -= smallest
+        return deposit
+      })
+      this.state.pots.push(pot)
+      smallest = this.getSmallestBet()
     }
   }
 
@@ -221,6 +229,13 @@ export class HoldEm {
    */
   private getHighestBet() {
     return Math.max(...this.state.players.map(player => player.currentBet))
+  }
+
+  /**
+   * Returns the highest bet of the current round.
+   */
+  private getSmallestBet() {
+    return Math.min(...this.state.players.map(player => player.currentBet))
   }
 
   /**
@@ -305,26 +320,10 @@ export class HoldEm {
     return [minBet, maxBet]
   }
 
-  private definePots(smallBlind: number, largeBlind: number, players: Player[], optionsPots?: Partial<Pot>[]): Pot[] {
-    const pots = [players.map((_, index) => {
-        if (index === 0) {
-          return smallBlind
-        }
-        if (index === 1) {
-          return largeBlind
-        }
-        return 0
-      })
-    ]
-    optionsPots?.forEach((optionPot, i) => {
-      const pot: number[] = []
-      for (let j = 0; j < players.length; j++) {
-        const optionPotValue = optionPot[j]
-        pot[j] = optionPotValue != null ? Math.max(0, optionPotValue) : pots?.[i]?.[j] || 0
-      }
-      pots[i] = pot
-    })
-    return pots
+  private definePots(players: Player[], optionsPots?: Partial<Pot>[]): Pot[] {
+    return optionsPots?.map(optionPot => {
+      return players.map((player, index) => optionPot[index] ?? 0)
+    }) || []
   }
 
   private drawCommunityCards (deck: Deck, optionsCommunityCards?: Deck): State['communityCards'] {
