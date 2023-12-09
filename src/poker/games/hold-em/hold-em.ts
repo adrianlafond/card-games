@@ -22,7 +22,6 @@ export class HoldEm {
       deck,
       players,
       currentPlayer: options?.currentPlayer ?? 2 % players.length,
-      currentBet: options?.currentBet ?? largeBlind,
       pots: this.definePots(smallBlind, largeBlind, players, options?.pots),
       round,
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
@@ -63,11 +62,11 @@ export class HoldEm {
     }
     return {
       currentPlayer: this.state.currentPlayer,
-      currentBet: this.state.currentBet,
       players: this.state.players.map(player => ({
+        active: player.active,
+        chanceToBet: player.chanceToBet,
         currentBet: player.currentBet,
         purse: player.purse,
-        active: player.active
       })),
       pots: this.state.pots.map(pot => ([...pot])),
       round: this.state.round,
@@ -98,6 +97,7 @@ export class HoldEm {
   private processFold (): ActionState {
     const currentPlayer = this.state.players[this.state.currentPlayer]
     currentPlayer.active = false
+    currentPlayer.chanceToBet = true
     this.concludeAction()
     return this.getState()
   }
@@ -107,12 +107,14 @@ export class HoldEm {
     if (errorResult != null) {
       return errorResult
     }
+    const currentPlayer = this.state.players[this.state.currentPlayer]
+    currentPlayer.chanceToBet = true
     this.concludeAction()
     return this.getState()
   }
 
   private generateCheckError (): ActionState | null {
-    if (this.state.currentBet > 0) {
+    if (this.getHighestBet() > this.state.players[this.state.currentPlayer].currentBet) {
       return this.getErrorResult({ message: errors.checkNotAllowed })
     }
     return null
@@ -124,9 +126,10 @@ export class HoldEm {
       return errorResult
     }
     const currentPlayer = this.state.players[this.state.currentPlayer]
-    const callAmount = this.state.currentBet - currentPlayer.currentBet
+    const callAmount = this.getHighestBet() - currentPlayer.currentBet
     currentPlayer.currentBet += callAmount
     currentPlayer.purse -= callAmount
+    currentPlayer.chanceToBet = true
     this.state.pots[this.state.pots.length - 1][this.state.currentPlayer] += callAmount
     this.concludeAction()
     return this.getState()
@@ -141,6 +144,8 @@ export class HoldEm {
     if (errorResult != null) {
       return errorResult
     }
+    const currentPlayer = this.state.players[this.state.currentPlayer]
+    currentPlayer.chanceToBet = true
     this.concludeAction()
     return this.getState()
   }
@@ -152,7 +157,7 @@ export class HoldEm {
     }
     const requiredAmount = amount ?? 0
     const currentPlayer = this.state.players[this.state.currentPlayer]
-    const callAmount = this.state.currentBet - currentPlayer.currentBet
+    const callAmount = this.getHighestBet() - currentPlayer.currentBet
 
     if (requiredAmount < callAmount + this.state.minBet) {
       const errorResult = this.generateBetOrRaiseError(0)
@@ -163,6 +168,7 @@ export class HoldEm {
 
     currentPlayer.currentBet += requiredAmount
     currentPlayer.purse -= requiredAmount
+    currentPlayer.chanceToBet = true
     this.state.pots[this.state.pots.length - 1][this.state.currentPlayer] += requiredAmount
     this.concludeAction()
     return this.getState()
@@ -191,13 +197,13 @@ export class HoldEm {
       // Complete the hand if only 1 player left.
       this.state.round = 'complete'
     }
-    const prevCurrentPlayer = this.state.currentPlayer
+
+    const allChanceToBet = this.state.players.every(player => player.chanceToBet || !player.active)
+    const allCalled = this.state.players.every(player => !player.active || player.currentBet >= this.getHighestBet() || player.purse === 0)
     this.makeNextPlayerCurrent()
-    if (this.state.currentPlayer < prevCurrentPlayer) {
-      const playersNeedChanceToCall = this.state.players.some(player => player.active && player.currentBet < this.state.currentBet)
-      if (playersNeedChanceToCall || this.state.isPreflopFirstPass) {
-        this.state.isPreflopFirstPass = false
-      } else if (this.state.round === 'preflop') {
+
+    if (allChanceToBet && allCalled) {
+      if (this.state.round === 'preflop') {
         this.state.round = 'flop'
       } else if (this.state.round === 'flop') {
         this.state.round = 'turn'
@@ -208,6 +214,13 @@ export class HoldEm {
         // shown > compare hands, remove losers from pots
       }
     }
+  }
+
+  /**
+   * Returns the highest bet of the current round.
+   */
+  private getHighestBet() {
+    return Math.max(...this.state.players.map(player => player.currentBet))
   }
 
   /**
@@ -246,7 +259,8 @@ export class HoldEm {
       cards: [optionPlayer?.cards?.[0] ?? takeCard(deck), optionPlayer?.cards?.[1] ?? takeCard(deck)],
       purse: optionPlayer?.purse ?? DEFAULT_PLAYER_PURSE,
       currentBet: optionPlayer?.currentBet ?? 0,
-      active: optionPlayer?.active ?? true
+      active: optionPlayer?.active ?? true,
+      chanceToBet: optionPlayer?.chanceToBet ?? false,
     }
   }
 
@@ -351,8 +365,8 @@ export class HoldEm {
     if (!this.state.players[this.state.currentPlayer].active) {
       throw new Error('The current player is no longer active.')
     }
-    if (this.state.currentBet < 0) {
-      throw new Error('The current bet must be 0 or greater.')
+    if (this.state.players.some(player => player.currentBet < 0)) {
+      throw new Error('A bet cannot be less than zero.')
     }
   }
 }

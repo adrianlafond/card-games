@@ -18,6 +18,13 @@ export interface BasePlayer {
    * player must either fold or call with 5 to bring their currentBet up to 10.
    */
   currentBet: number
+
+  /**
+   * Whether the player has had a chance to bet or raise in the current round.
+   * The hand cannot transition to a new round until all active players have had
+   * a chance to bet.
+   */
+  chanceToBet: boolean
 }
 
 export interface Player extends BasePlayer {
@@ -53,7 +60,6 @@ export type Pot = number[]
  */
 export interface BaseState {
   currentPlayer: number
-  currentBet: number
   pots: Pot[]
   round: 'preflop' | 'flop' | 'turn' | 'river' | 'complete'
   minBet: number

@@ -29,7 +29,6 @@ describe('Hold\'em poker', () => {
       expect(state.pots.length).toBe(1)
       expect(state.pots[0]).toEqual([DEFAULT_SMALL_BLIND, DEFAULT_LARGE_BLIND])
       expect(hand.getPotTotal(0)).toEqual(DEFAULT_SMALL_BLIND + DEFAULT_LARGE_BLIND)
-      expect(state.currentBet).toBe(DEFAULT_LARGE_BLIND)
     })
     it('makes bet amount be "no limit" by default', () => {
       expect(state.minBet).toBe(DEFAULT_LARGE_BLIND * 2)
@@ -82,19 +81,12 @@ describe('Hold\'em poker', () => {
     it('throws if the current player is not active', () => {
       expect(() => new HoldEm({ currentPlayer: 0, players: [{ active: false }] })).toThrow()
     })
-    it('allows the current bet to be customized', () => {
-      const state = new HoldEm({ currentBet: 999 }).getState()
-      expect(state.currentBet).toBe(999)
-    })
-    it('throws if the current bet is less than 0', () => {
-      expect(() => new HoldEm({ currentBet: -5 })).toThrow()
-    })
     it('allows players to be customized', () => {
       const hand = new HoldEm({
         largeBlind: 50,
-        players: [{}, { cards: ['KH', '7D'], purse: 777, active: false }],
+        players: [{}, { cards: ['KH', '7D'], purse: 777, active: false, chanceToBet: true }],
       })
-      expect(hand.getState().players[1]).toEqual({ purse: 727, active: false, currentBet: 50 })
+      expect(hand.getState().players[1]).toEqual({ purse: 727, active: false, currentBet: 50, chanceToBet: true })
       expect(hand.getCardsForPlayer(1)).toEqual(['KH', '7D'])
     })
     it('allows pots to be customized', () =>{
@@ -119,7 +111,6 @@ describe('Hold\'em poker', () => {
       expect(state.players[0].purse).toBe(DEFAULT_PLAYER_PURSE - 5)
       expect(state.players[1].purse).toBe(DEFAULT_PLAYER_PURSE - 10)
       expect(state.pots[0]).toEqual([5, 10])
-      expect(state.currentBet).toBe(10)
     })
     it('does now allow the small blind to be less than 0', () => {
       const state = new HoldEm({ smallBlind: -5 }).getState()
@@ -135,7 +126,6 @@ describe('Hold\'em poker', () => {
       expect(state.players[1].currentBet).toBe(16)
       expect(state.players[1].purse).toBe(DEFAULT_PLAYER_PURSE - 16)
       expect(hand.getPotTotal(0)).toBeGreaterThanOrEqual(16)
-      expect(state.currentBet).toBe(16)
     })
     it('defines the small blind as half the large blind by default', () => {
       const hand = new HoldEm({ largeBlind: 16 })
@@ -156,7 +146,6 @@ describe('Hold\'em poker', () => {
       expect(state.players[1].purse).toBe(DEFAULT_PLAYER_PURSE - DEFAULT_SMALL_BLIND)
       expect(hand.getPotTotal(0)).toBe(DEFAULT_SMALL_BLIND + DEFAULT_SMALL_BLIND)
       expect(state.pots[0]).toEqual([DEFAULT_SMALL_BLIND, DEFAULT_SMALL_BLIND])
-      expect(state.currentBet).toBe(DEFAULT_SMALL_BLIND)
     })
     it('does not allow the large blind to be less than the small blind', () => {
       const hand = new HoldEm({ smallBlind: 10, largeBlind: 5 })
@@ -167,7 +156,6 @@ describe('Hold\'em poker', () => {
       expect(state.players[1].purse).toBe(DEFAULT_PLAYER_PURSE - 10)
       expect(hand.getPotTotal(0)).toBe(20)
       expect(state.pots[0]).toEqual([10, 10])
-      expect(state.currentBet).toBe(10)
     })
   })
   describe('max raises', () => {
@@ -279,7 +267,7 @@ describe('Hold\'em poker', () => {
     it('updates the pot and player purse on successful "raise"', () => {
       const hand = new HoldEm()
       const state = hand.getState()
-      const callAmount = state.currentBet - DEFAULT_SMALL_BLIND
+      const callAmount = DEFAULT_LARGE_BLIND - DEFAULT_SMALL_BLIND
       const result = hand.act({ action: 'raise', amount: callAmount + state.minBet })
       expect(result.error).toBeUndefined()
       expect(result.players[0].purse).toBe(DEFAULT_PLAYER_PURSE - DEFAULT_LARGE_BLIND - state.minBet)
@@ -309,7 +297,7 @@ describe('Hold\'em poker', () => {
     it('returns an error if bet is greater than the min bet but not including the call amount', () => {
       const hand = new HoldEm()
       const state = hand.getState()
-      const callAmount = state.currentBet - state.players[state.currentPlayer].currentBet
+      const callAmount = DEFAULT_LARGE_BLIND - state.players[state.currentPlayer].currentBet
       const result = hand.act({ action: 'raise', amount: hand.getState().minBet })
       expect(callAmount).toBeGreaterThan(0)
       expect(result.error?.message).toBe(errors.lessThanMinBet.replace('$1', `${hand.getState().minBet}`))
@@ -323,6 +311,28 @@ describe('Hold\'em poker', () => {
       const hand = new HoldEm({ limit: 'fixed' })
       const result = hand.act({ action: 'raise', amount: hand.getState().minBet + 999 })
       expect(result.error?.message).toBe(errors.greaterThanMaxBet.replace('$1', `${hand.getState().maxBet}`))
+    })
+    it('continues preflop round until all players have had a chnace to bet', () => {
+      const hand = new HoldEm()
+      const state1 = hand.getState()
+      expect(state1.players[0].chanceToBet).toBe(false)
+      expect(state1.players[1].chanceToBet).toBe(false)
+      expect(state1.currentPlayer).toBe(0)
+      expect(state1.round).toBe('preflop')
+      hand.act({ action: 'call' })
+      const state2 = hand.getState()
+      expect(state2.players[0].chanceToBet).toBe(true)
+      expect(state2.players[1].chanceToBet).toBe(false)
+      expect(state2.currentPlayer).toBe(1)
+      expect(state2.round).toBe('preflop')
+      hand.act({ action: 'check' })
+      const state3 = hand.getState()
+      expect(state3.error).toBeUndefined()
+      expect(state3.pots[0]).toEqual([DEFAULT_LARGE_BLIND, DEFAULT_LARGE_BLIND])
+      expect(state3.players[0].chanceToBet).toBe(true)
+      expect(state3.players[1].chanceToBet).toBe(true)
+      expect(state3.currentPlayer).toBe(0)
+      expect(state3.round).toBe('flop')
     })
   })
 })
