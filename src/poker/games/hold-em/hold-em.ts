@@ -215,8 +215,9 @@ export class HoldEm {
     let smallest = this.getSmallestBet()
     while (smallest > 0) {
       const pot = this.state.players.map(player => {
-        const deposit = player.currentBet > 0 ? smallest : 0;
-        player.currentBet -= smallest
+        const playerBet = Math.min(player.currentBet, smallest)
+        const deposit = player.currentBet > 0 ? playerBet : 0;
+        player.currentBet -= playerBet
         return deposit
       })
       this.state.pots.push(pot)
@@ -235,7 +236,8 @@ export class HoldEm {
    * Returns the highest bet of the current round.
    */
   private getSmallestBet() {
-    return Math.min(...this.state.players.map(player => player.currentBet))
+    const bets = this.state.players.filter(player => player.active && player.currentBet > 0).map(player => player.currentBet)
+    return bets.length ? Math.min(...bets) : 0
   }
 
   /**

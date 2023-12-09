@@ -295,7 +295,7 @@ describe('Hold\'em poker', () => {
       const result = hand.act({ action: 'raise', amount: hand.getState().minBet + 999 })
       expect(result.error?.message).toBe(errors.greaterThanMaxBet.replace('$1', `${hand.getState().maxBet}`))
     })
-    it('continues preflop round until all players have had a chnace to bet', () => {
+    it('continues preflop round until all players have had a chance to bet', () => {
       const hand = new HoldEm()
       const state1 = hand.getState()
       expect(state1.players[0].chanceToBet).toBe(false)
@@ -316,6 +316,39 @@ describe('Hold\'em poker', () => {
       expect(state3.players[1].chanceToBet).toBe(true)
       expect(state3.currentPlayer).toBe(0)
       expect(state3.round).toBe('flop')
+    })
+    it('creates multiple pots at the end of a round if players have gone all in', () => {
+      const hand = new HoldEm({ players: [
+        { purse: 10 },
+        { purse: 20 },
+        { purse: 30 },
+        { purse: 40 },
+        { purse: 50 },
+        { purse: 60 },
+      ]})
+
+      const state1 = hand.getState()
+      expect(state1.players.map(player => player.currentBet)).toEqual([1, 2, 0, 0, 0, 0])
+      hand.act({ action: 'raise', amount: 30 })
+      hand.act({ action: 'raise', amount: 40 })
+      hand.act({ action: 'raise', amount: 50 })
+      hand.act({ action: 'raise', amount: 60 })
+
+      const state2 = hand.getState()
+      expect(state2.round).toBe('preflop')
+      expect(state2.pots.length).toBe(0)
+      hand.act({ action: 'fold' })
+      hand.act({ action: 'fold' })
+
+      const state3 = hand.getState()
+      expect(state3.players.map(player => player.active)).toEqual([false, false, true, true, true, true])
+      expect(state3.players.map(player => player.purse)).toEqual([9, 18, 0, 0, 0, 0])
+      expect(state3.round).toBe('flop')
+      expect(state3.pots.length).toBe(4)
+      expect(state3.pots[0]).toEqual([1, 2, 30, 30, 30, 30])
+      expect(state3.pots[1]).toEqual([0, 0, 0, 10, 10, 10])
+      expect(state3.pots[2]).toEqual([0, 0, 0, 0, 10, 10])
+      expect(state3.pots[3]).toEqual([0, 0, 0, 0, 0, 10])
     })
   })
 })
