@@ -1,6 +1,6 @@
 import { sortHands } from './sort-hands'
 
-describe.skip('sortHands()', () => {
+describe('sortHands()', () => {
   it('ranks high cards with a single card', () => {
     expect(sortHands(['7C'], ['KD'], ['JH'])).toEqual([
       { rank: 2, cards: ['7C'], hand: 'high-card' },
@@ -21,9 +21,29 @@ describe.skip('sortHands()', () => {
       ['3H', 'KS', '7H', 'JS', '8H', 'QS', 'AH'],
       ['JH', '6D', '4D', '5D', 'XH', 'QH', '2H']
     )).toEqual([
-      { rank: 0, cards: ['2C', '2D', 'AC', 'KC', 'JC', 'XD', '9D'], hand: 'pair' },
-      { rank: 1, cards: ['AH', 'KS', 'QS', 'JS', '8H', '7H', '3H'], hand: 'high-card' },
-      { rank: 2, cards: ['QH', 'JH', 'XH', '5D', '6D', '4D', '2H'], hand: 'high-card' }
+      { rank: 0, cards: ['2C', '2D', 'AC', 'KC', 'JC'], hand: 'pair' },
+      { rank: 1, cards: ['AH', 'KS', 'QS', 'JS', '8H'], hand: 'high-card' },
+      { rank: 2, cards: ['QH', 'JH', 'XH', '6D', '5D'], hand: 'high-card' }
+    ])
+  })
+  it('ranks matching hands by highest card', () => {
+    expect(sortHands(
+      ['8C', '7D', '9S', 'XD', 'JH'],
+      ['8D', 'QC', '9D', 'XC', 'JD'],
+    )).toEqual([
+      { rank: 1, cards: ['JH', 'XD', '9S', '8C', '7D'], hand: 'straight' },
+      { rank: 0, cards: ['QC', 'JD', 'XC', '9D', '8D'], hand: 'straight' },
+    ])
+  })
+  it('ranks matching hands with same highest card as even', () => {
+    expect(sortHands(
+      ['8C', '7D', '9S', 'XD', 'JH'],
+      ['8D', '7C', '9D', 'XC', 'JD'],
+      ['3C', '4D', 'AS', 'KH', '2D'],
+    )).toEqual([
+      { rank: 0, cards: ['JH', 'XD', '9S', '8C', '7D'], hand: 'straight' },
+      { rank: 0, cards: ['JD', 'XC', '9D', '8D', '7C'], hand: 'straight' },
+      { rank: 1, cards: ['AS', 'KH', '4D', '3C', '2D'], hand: 'high-card' },
     ])
   })
 })
