@@ -35,7 +35,7 @@ describe('Hold\'em poker', () => {
     })
   })
   describe('(contrived) setup', () => {
-    const rounds: HoldEmConstructor['round'][] = ['preflop', 'flop', 'turn', 'river', 'complete']
+    const rounds: Array<HoldEmConstructor['round']> = ['preflop', 'flop', 'turn', 'river', 'complete']
     rounds.forEach(round => {
       it(`can be started at ${round}`, () => {
         const state = new HoldEm({ round }).getState()
@@ -61,7 +61,7 @@ describe('Hold\'em poker', () => {
     it('allows community cards to be pre-selected', () => {
       const state = new HoldEm({
         communityCards: ['AC', 'AD', 'AH', 'AS', '2C'],
-        round: 'river',
+        round: 'river'
       }).getState()
       expect(state.communityCards).toEqual(['AC', 'AD', 'AH', 'AS', '2C'])
     })
@@ -83,15 +83,15 @@ describe('Hold\'em poker', () => {
     it('allows players to be customized', () => {
       const hand = new HoldEm({
         largeBlind: 50,
-        players: [{}, { cards: ['KH', '7D'], purse: 777, active: false, chanceToBet: true }],
+        players: [{}, { cards: ['KH', '7D'], purse: 777, active: false, chanceToBet: true }]
       })
       expect(hand.getState().players[1]).toEqual({ purse: 727, active: false, currentBet: 50, chanceToBet: true })
       expect(hand.getCardsForPlayer(1)).toEqual(['KH', '7D'])
     })
-    it('allows pots to be customized', () =>{
+    it('allows pots to be customized', () => {
       const state = new HoldEm({
         players: Array.from(Array(3)),
-        pots: [[77, 700], [100]],
+        pots: [[77, 700], [100]]
       }).getState()
       expect(state.pots[0]).toEqual([77, 700, 0])
       expect(state.pots[1]).toEqual([100, 0, 0])
@@ -318,14 +318,16 @@ describe('Hold\'em poker', () => {
       expect(state3.round).toBe('flop')
     })
     it('creates multiple pots at the end of a round if players have gone all in', () => {
-      const hand = new HoldEm({ players: [
-        { purse: 10 },
-        { purse: 20 },
-        { purse: 30 },
-        { purse: 40 },
-        { purse: 50 },
-        { purse: 60 },
-      ]})
+      const hand = new HoldEm({
+        players: [
+          { purse: 10 },
+          { purse: 20 },
+          { purse: 30 },
+          { purse: 40 },
+          { purse: 50 },
+          { purse: 60 }
+        ]
+      })
 
       const state1 = hand.getState()
       expect(state1.players.map(player => player.currentBet)).toEqual([1, 2, 0, 0, 0, 0])

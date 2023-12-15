@@ -119,7 +119,7 @@ export interface HoldEmConstructor extends Omit<Partial<State>, 'deck' | 'player
    * The players, who will be referenced by index. If no purse is defined, the
    * default is 100. At least 2 players will be generated if less than 2 are defined.
    */
-  players?: Partial<Omit<Player, 'currentBet'>>[]
+  players?: Array<Partial<Omit<Player, 'currentBet'>>>
 
   /**
    * The type of betting limit for this hand. Default is "none".

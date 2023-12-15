@@ -11,7 +11,7 @@ export const handKeys = [
   'three-of-a-kind',
   'two-pair',
   'pair',
-  'high-card',
+  'high-card'
   // ...values.map(value => `straight-flush--${value}`).splice(1, 10),
   // ...values.map(value => `four-of-a-kind--${value}`),
   // ...values.reduce((array, value) => {

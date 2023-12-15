@@ -41,14 +41,15 @@ export class HoldEm {
    * Returns the hole cards of a player for @param index.
    */
   getCardsForPlayer (index: number): [CardKey, CardKey] | null {
-    return this.state.players[index] ? [...this.state.players[index].cards] : null
+    return this.state.players[index] != null ? [...this.state.players[index].cards] : null
   }
 
   /**
    * Returns the total amount in a pot by summing the bets contributed by each player.
    */
   getPotTotal (index: number): number {
-    return this.state.pots?.[index]?.reduce((sum, n) => sum + n, 0) || 0
+    const total = this.state.pots?.[index]?.reduce((sum, n) => sum + n, 0)
+    return total != null ? total : 0
   }
 
   getState (): ActionState {
@@ -66,7 +67,7 @@ export class HoldEm {
         active: player.active,
         chanceToBet: player.chanceToBet,
         currentBet: player.currentBet,
-        purse: player.purse,
+        purse: player.purse
       })),
       pots: this.state.pots.map(pot => ([...pot])),
       round: this.state.round,
@@ -211,12 +212,12 @@ export class HoldEm {
     }
   }
 
-  private gatherBetsIntoPots() {
+  private gatherBetsIntoPots (): void {
     let smallest = this.getSmallestBet()
     while (smallest > 0) {
       const pot = this.state.players.map(player => {
         const playerBet = Math.min(player.currentBet, smallest)
-        const deposit = player.currentBet > 0 ? playerBet : 0;
+        const deposit = player.currentBet > 0 ? playerBet : 0
         player.currentBet -= playerBet
         return deposit
       })
@@ -228,16 +229,16 @@ export class HoldEm {
   /**
    * Returns the highest bet of the current round.
    */
-  private getHighestBet() {
+  private getHighestBet (): number {
     return Math.max(...this.state.players.map(player => player.currentBet))
   }
 
   /**
    * Returns the highest bet of the current round.
    */
-  private getSmallestBet() {
+  private getSmallestBet (): number {
     const bets = this.state.players.filter(player => player.active && player.currentBet > 0).map(player => player.currentBet)
-    return bets.length ? Math.min(...bets) : 0
+    return (bets.length > 0) ? Math.min(...bets) : 0
   }
 
   /**
@@ -277,7 +278,7 @@ export class HoldEm {
       purse: optionPlayer?.purse ?? DEFAULT_PLAYER_PURSE,
       currentBet: optionPlayer?.currentBet ?? 0,
       active: optionPlayer?.active ?? true,
-      chanceToBet: optionPlayer?.chanceToBet ?? false,
+      chanceToBet: optionPlayer?.chanceToBet ?? false
     }
   }
 
@@ -301,7 +302,7 @@ export class HoldEm {
     return blinds
   }
 
-  private defineBetLimits(limit: State['limit'], smallBlind: number, largeBlind: number, options?: HoldEmConstructor): [number, number] {
+  private defineBetLimits (limit: State['limit'], smallBlind: number, largeBlind: number, options?: HoldEmConstructor): [number, number] {
     let minBet = 0
     let maxBet = Number.MAX_VALUE
     if (options?.minBet != null) {
@@ -322,10 +323,10 @@ export class HoldEm {
     return [minBet, maxBet]
   }
 
-  private definePots(players: Player[], optionsPots?: Partial<Pot>[]): Pot[] {
+  private definePots (players: Player[], optionsPots?: Array<Partial<Pot>>): Pot[] {
     return optionsPots?.map(optionPot => {
-      return players.map((player, index) => optionPot[index] ?? 0)
-    }) || []
+      return players.map((_, index) => optionPot[index] ?? 0)
+    }) ?? []
   }
 
   private drawCommunityCards (deck: Deck, optionsCommunityCards?: Deck): State['communityCards'] {
@@ -341,7 +342,7 @@ export class HoldEm {
     return communityCards as State['communityCards']
   }
 
-  private removePreselectedCards(deck: Deck, options?: HoldEmConstructor): void {
+  private removePreselectedCards (deck: Deck, options?: HoldEmConstructor): void {
     options?.communityCards?.forEach(card => {
       this.removeCardFromDeck(deck, card)
     })
@@ -352,14 +353,14 @@ export class HoldEm {
     })
   }
 
-  private removeCardFromDeck(deck: Deck, card: CardKey): void {
+  private removeCardFromDeck (deck: Deck, card: CardKey): void {
     const index = deck.findIndex(deckCard => deckCard === card)
     if (index !== -1) {
       deck.splice(index, 1)
     }
   }
 
-  private checkInitialSetup() {
+  private checkInitialSetup (): void {
     if (this.state.players[this.state.currentPlayer] == null) {
       throw new Error(`The current player" index ${this.state.currentPlayer} does not exist.`)
     }
