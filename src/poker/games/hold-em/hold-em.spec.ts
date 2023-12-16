@@ -149,7 +149,12 @@ describe('Hold\'em poker', () => {
     })
   })
   describe('max raises', () => {
-    // TODO via actually making raises squentially
+    it('returns error if too many raises attempted', () => {
+      const hand = new HoldEm()
+      expect(hand.act({ action: 'raise', amount: 10 }).error).toBeUndefined()
+      expect(hand.act({ action: 'raise', amount: 20 }).error).toBeUndefined()
+      expect(hand.act({ action: 'raise', amount: 30 }).error).toBeUndefined()
+    })
   })
   describe('betting limits', () => {
     describe('none', () => {
@@ -325,16 +330,18 @@ describe('Hold\'em poker', () => {
           { purse: 30 },
           { purse: 40 },
           { purse: 50 },
-          { purse: 60 }
+          { purse: 60 },
+          { purse: 80 },
         ]
       })
 
       const state1 = hand.getState()
-      expect(state1.players.map(player => player.currentBet)).toEqual([1, 2, 0, 0, 0, 0])
+      expect(state1.players.map(player => player.currentBet)).toEqual([1, 2, 0, 0, 0, 0, 0])
       hand.act({ action: 'raise', amount: 30 })
       hand.act({ action: 'raise', amount: 40 })
       hand.act({ action: 'raise', amount: 50 })
       hand.act({ action: 'raise', amount: 60 })
+      hand.act({ action: 'raise', amount: 70 })
 
       const state2 = hand.getState()
       expect(state2.round).toBe('preflop')
@@ -343,14 +350,84 @@ describe('Hold\'em poker', () => {
       hand.act({ action: 'fold' })
 
       const state3 = hand.getState()
-      expect(state3.players.map(player => player.active)).toEqual([false, false, true, true, true, true])
-      expect(state3.players.map(player => player.purse)).toEqual([9, 18, 0, 0, 0, 0])
+      expect(state3.players.map(player => player.active)).toEqual([false, false, true, true, true, true, true])
+      expect(state3.players.map(player => player.purse)).toEqual([9, 18, 0, 0, 0, 0, 10])
       expect(state3.round).toBe('flop')
-      expect(state3.pots.length).toBe(4)
-      expect(state3.pots[0]).toEqual([1, 2, 30, 30, 30, 30])
-      expect(state3.pots[1]).toEqual([0, 0, 0, 10, 10, 10])
-      expect(state3.pots[2]).toEqual([0, 0, 0, 0, 10, 10])
-      expect(state3.pots[3]).toEqual([0, 0, 0, 0, 0, 10])
+
+      expect(state3.pots.length).toBe(5)
+      expect(state3.pots[0]).toEqual([1, 2, 30, 30, 30, 30, 30])
+      expect(state3.pots[1]).toEqual([0, 0, 0, 10, 10, 10, 10])
+      expect(state3.pots[2]).toEqual([0, 0, 0, 0, 10, 10, 10])
+      expect(state3.pots[3]).toEqual([0, 0, 0, 0, 0, 10, 10])
+      expect(state3.pots[4]).toEqual([0, 0, 0, 0, 0, 0, 10])
+    })
+    it('completes the hand after a showdown', () => {
+      const hand = new HoldEm({
+        communityCards: ['AH', 'KD', '6H', 'XC', 'JS'],
+        players: [
+          { purse: 100, cards: ['KH', '3S'] },
+          { purse: 100, cards: ['AD', '5D'] },
+          { purse: 100, cards: ['4D', '5C'] },
+        ],
+        pots: [[100, 100, 100]],
+        round: 'river',
+      })
+
+      const state1 = hand.getState()
+      expect(state1.round).toBe('river')
+
+      hand.act({ action: 'bet', amount: 10 })
+      hand.act({ action: 'call' })
+      hand.act({ action: 'fold' })
+      const state2 = hand.getState()
+      expect(state2.round).toBe('complete')
+      expect(state2.players[0].showdown).toEqual({
+        cards: ['KD', 'KH', 'AH', 'JS', 'XC'],
+        hand: 'pair',
+        rank: 1,
+      })
+      expect(state2.players[1].showdown).toEqual({
+        cards: ['AD', 'AH', 'KD', 'JS', 'XC'],
+        hand: 'pair',
+        rank: 0,
+      })
+      expect(state2.players[2].showdown).toBeUndefined()
+      expect(state2).toEqual({
+        communityCards: ['AH', 'KD', '6H', 'XC', 'JS'],
+        currentPlayer: 0,
+        pots: [[110, 110, 100]],
+        round: 'complete',
+        minBet: 4,
+        maxBet: Number.MAX_VALUE,
+        players: [{
+          active: true,
+          chanceToBet: true,
+          currentBet: 0,
+          purse: 90,
+          showdown: {
+            cards: ['KD', 'KH', 'AH', 'JS', 'XC'],
+            hand: 'pair',
+            rank: 1,
+          },
+        }, {
+          active: true,
+          chanceToBet: true,
+          currentBet: 0,
+          purse: 90,
+          showdown: {
+            cards: ['AD', 'AH', 'KD', 'JS', 'XC'],
+            hand: 'pair',
+            rank: 0,
+          },
+        }, {
+          active: false,
+          chanceToBet: true,
+          currentBet: 0,
+          purse: 100,
+        }],
+        raiseAllowed: false,
+      })
+
     })
   })
 })

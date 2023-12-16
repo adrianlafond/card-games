@@ -1,4 +1,5 @@
 import { CardKey, Deck } from '../../../cards'
+import { RankedHand } from '../../hands'
 
 export interface BasePlayer {
 /**
@@ -25,6 +26,12 @@ export interface BasePlayer {
    * a chance to bet.
    */
   chanceToBet: boolean
+
+  /**
+   * Defined after a showdown. Contains the player's best hand and rank versus
+   * other hands.
+   */
+  showdown?: RankedHand
 }
 
 export interface Player extends BasePlayer {
@@ -119,7 +126,7 @@ export interface HoldEmConstructor extends Omit<Partial<State>, 'deck' | 'player
    * The players, who will be referenced by index. If no purse is defined, the
    * default is 100. At least 2 players will be generated if less than 2 are defined.
    */
-  players?: Array<Partial<Omit<Player, 'currentBet'>>>
+  players?: Array<Partial<Omit<Player, 'currentBet' | 'handRank'>>>
 
   /**
    * The type of betting limit for this hand. Default is "none".

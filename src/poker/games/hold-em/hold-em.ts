@@ -1,4 +1,5 @@
 import { takeCard, shuffle, Deck, CardKey } from '../../../cards'
+import { sortHands } from '../../hands'
 import { DEFAULT_LARGE_BLIND, DEFAULT_PLAYER_PURSE, DEFAULT_SMALL_BLIND } from './constants'
 import { errors } from './errors'
 import { ActionError, ActionState, HoldEmConstructor, Player, PlayerAction, Pot, Round, State } from './hold-em.types'
@@ -12,16 +13,18 @@ export class HoldEm {
     const [smallBlind, largeBlind] = this.defineBlinds(options)
     const limit = options?.limit ?? 'none'
     const [minBet, maxBet] = this.defineBetLimits(limit, smallBlind, largeBlind, options)
-    const players = this.definePlayers(deck, options?.players)
-    players[0].currentBet = smallBlind
-    players[1].currentBet = largeBlind
-    players[0].purse = Math.max(0, players[0].purse - smallBlind)
-    players[1].purse = Math.max(0, players[1].purse - largeBlind)
+    const players = this.definePlayers(deck, options)
     const round = options?.round ?? 'preflop'
+    if (round === 'preflop') {
+      players[0].currentBet = smallBlind
+      players[1].currentBet = largeBlind
+      players[0].purse = Math.max(0, players[0].purse - smallBlind)
+      players[1].purse = Math.max(0, players[1].purse - largeBlind)
+    }
     this.state = {
       deck,
       players,
-      currentPlayer: options?.currentPlayer ?? 2 % players.length,
+      currentPlayer: options?.currentPlayer ?? (round === 'preflop' ? 2 % players.length : 0),
       pots: this.definePots(players, options?.pots),
       round,
       maxRaisesPerRound: options?.maxRaisesPerRound != null ? Math.max(0, options?.maxRaisesPerRound) : 3,
@@ -67,13 +70,14 @@ export class HoldEm {
         active: player.active,
         chanceToBet: player.chanceToBet,
         currentBet: player.currentBet,
-        purse: player.purse
+        purse: player.purse,
+        ...(player.showdown && { showdown: player.showdown }),
       })),
       pots: this.state.pots.map(pot => ([...pot])),
       round: this.state.round,
       minBet: this.state.minBet,
       maxBet: this.state.maxBet,
-      raiseAllowed: this.state.raisesMade < this.state.maxRaisesPerRound,
+      raiseAllowed: this.state.round !== 'complete' && this.state.raisesMade < this.state.maxRaisesPerRound,
       communityCards
     }
   }
@@ -140,14 +144,7 @@ export class HoldEm {
   }
 
   private processBet (amount?: number): ActionState {
-    const errorResult = this.generateBetOrRaiseError(amount)
-    if (errorResult != null) {
-      return errorResult
-    }
-    const currentPlayer = this.state.players[this.state.currentPlayer]
-    currentPlayer.chanceToBet = true
-    this.concludeAction()
-    return this.getState()
+    return this.processRaise(amount)
   }
 
   private processRaise (amount?: number): ActionState {
@@ -207,23 +204,71 @@ export class HoldEm {
       this.state.round = rounds[currentRoundIndex + 1]
       this.gatherBetsIntoPots()
       if (this.state.round === 'complete') {
-        // shown > compare hands, remove losers from pots
+        const rankedHands = sortHands(...this.state.players.map(player => (
+          player.active ? [...player.cards, ...this.state.communityCards] : null
+        )))
+        this.state.players.forEach((player, index) => {
+          const rankedHand = rankedHands[index]
+          if (rankedHand != null) {
+            player.showdown = rankedHand
+          }
+        })
       }
     }
   }
 
+  /**
+   * After each round, gathers current bets into pots (multiple because there will be side pots).
+   */
   private gatherBetsIntoPots (): void {
-    let smallest = this.getSmallestBet()
-    while (smallest > 0) {
-      const pot = this.state.players.map(player => {
-        const playerBet = Math.min(player.currentBet, smallest)
-        const deposit = player.currentBet > 0 ? playerBet : 0
-        player.currentBet -= playerBet
-        return deposit
+    const roundPots: Pot[] = []
+    let allInPlayer = this.getAllInPlayerWithSmallestBet()
+    while (allInPlayer != null) {
+      const allInPlayerBet = allInPlayer.currentBet
+      const pot: Pot = this.state.players.map(player => {
+        if (allInPlayer != null) {
+          const playerBet = Math.min(player.currentBet, allInPlayerBet)
+          const deposit = player.currentBet > 0 ? playerBet : 0
+          player.currentBet -= playerBet
+          return deposit
+        }
+        return player.currentBet
       })
-      this.state.pots.push(pot)
-      smallest = this.getSmallestBet()
+      roundPots.push(pot)
+      allInPlayer = this.getAllInPlayerWithSmallestBet()
     }
+
+    roundPots.push(this.state.players.map(player => {
+      const bet = player.currentBet
+      player.currentBet = 0
+      return bet
+    }))
+
+    if (this.state.pots.length && roundPots.length) {
+      const topPot = this.state.pots[this.state.pots.length - 1]
+      const bottomPot = roundPots.splice(0, 1)[0]
+      topPot.forEach((_, index) => {
+        topPot[index] += bottomPot[index]
+      })
+      this.state.pots = [...this.state.pots, ...roundPots]
+    } else if (this.state.pots.length === 0 && roundPots.length) {
+      this.state.pots = roundPots
+    } else if (this.state.pots.length === 0) {
+      this.state.pots = [this.state.players.map(player => player.currentBet)]
+    }
+  }
+
+  private getAllInPlayerWithSmallestBet(): Player | null {
+    const allIn = this.state.players.filter(player => player.active && player.currentBet > 0 && player.purse === 0)
+    let player: Player | null = allIn.length ? allIn[0] : null
+    if (allIn.length > 1) {
+      for (let i = 1; i < allIn.length; i++) {
+        if (player != null && allIn[i].currentBet < player.currentBet) {
+          player = allIn[i]
+        }
+      }
+    }
+    return player
   }
 
   /**
@@ -234,7 +279,7 @@ export class HoldEm {
   }
 
   /**
-   * Returns the highest bet of the current round.
+   * Returns the smallest bet of the current round.
    */
   private getSmallestBet (): number {
     const bets = this.state.players.filter(player => player.active && player.currentBet > 0).map(player => player.currentBet)
@@ -262,8 +307,8 @@ export class HoldEm {
     return result
   }
 
-  private definePlayers (deck: Deck, optionsPlayers?: HoldEmConstructor['players']): Player[] {
-    const players: Player[] = (optionsPlayers != null ? optionsPlayers.slice(0, 22) : []).map(
+  private definePlayers (deck: Deck, options?: HoldEmConstructor): Player[] {
+    const players: Player[] = (options?.players != null ? options.players.slice(0, 22) : []).map(
       item => this.createPlayer(deck, item)
     )
     while (players.length < 2) {
@@ -278,7 +323,7 @@ export class HoldEm {
       purse: optionPlayer?.purse ?? DEFAULT_PLAYER_PURSE,
       currentBet: optionPlayer?.currentBet ?? 0,
       active: optionPlayer?.active ?? true,
-      chanceToBet: optionPlayer?.chanceToBet ?? false
+      chanceToBet: optionPlayer?.chanceToBet ?? false,
     }
   }
 

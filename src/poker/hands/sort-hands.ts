@@ -9,21 +9,33 @@ export interface RankedHand {
   hand: Hand
 }
 
-export function sortHands (...playersCards: Deck[]): RankedHand[] {
-  const hands: RankedHand[] = playersCards.map(playerCards => {
-    const [cards, hand] = findBestHand(playerCards)
-    return { cards, hand, rank: playersCards.length - 1 }
+/**
+ * Given an array of player hands (collections of cards), returns them ranked as
+ * instances of RankedHand. Hands can be `null`, indicating that the player has
+ * folded (allowing indexes in the input and output to match player indexes at
+ * the table).
+ */
+export function sortHands (...playersCards: (Deck | null)[]): (RankedHand | null)[] {
+  const hands: (RankedHand | null)[] = playersCards.map(playerCards => {
+    if (playerCards != null) {
+      const [cards, hand] = findBestHand(playerCards)
+      return { cards, hand, rank: playersCards.filter(p => p != null).length - 1 }
+    }
+    return null
   })
 
   rankHands(hands)
   return hands
 }
 
-function rankHands(hands: RankedHand[]): RankedHand[] {
+function rankHands(hands: (RankedHand | null)[]): (RankedHand | null)[] {
   for (let i = 0; i < hands.length - 1; i++) {
     for (let j = i + 1; j < hands.length; j++) {
       const hand1 = hands[i]
       const hand2 = hands[j]
+      if (hand1 === null || hand2 === null) {
+        continue
+      }
       const handDelta = handKeys.indexOf(hand1.hand) - handKeys.indexOf(hand2.hand)
       if (handDelta < 0) {
         hand1.rank -= 1
@@ -44,9 +56,9 @@ function rankHands(hands: RankedHand[]): RankedHand[] {
     }
   }
   for (let i = 0; i < hands.length; i++) {
-    if (!hands.some(hand => hand.rank === i)) {
+    if (!hands.some(hand => hand != null && hand.rank === i)) {
       hands.forEach(hand => {
-        if (hand.rank === i + 1) {
+        if (hand != null && hand.rank === i + 1) {
           hand.rank -= 1
         }
       })
