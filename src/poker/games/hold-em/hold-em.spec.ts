@@ -150,10 +150,12 @@ describe('Hold\'em poker', () => {
   })
   describe('max raises', () => {
     it('returns error if too many raises attempted', () => {
-      const hand = new HoldEm()
-      expect(hand.act({ action: 'raise', amount: 10 }).error).toBeUndefined()
+      const hand = new HoldEm({ maxRaisesPerRound: 3 })
+      expect(hand.act({ action: 'bet', amount: 10 }).error).toBeUndefined()
       expect(hand.act({ action: 'raise', amount: 20 }).error).toBeUndefined()
       expect(hand.act({ action: 'raise', amount: 30 }).error).toBeUndefined()
+      expect(hand.act({ action: 'raise', amount: 40 }).error).toBeUndefined()
+      expect(hand.act({ action: 'raise', amount: 50 }).error?.message).toBe(errors.maxRaisesReached)
     })
   })
   describe('betting limits', () => {
@@ -262,12 +264,12 @@ describe('Hold\'em poker', () => {
       expect(result.error).toBeUndefined()
       expect(result.players[0].purse).toBe(DEFAULT_PLAYER_PURSE - DEFAULT_LARGE_BLIND - state.minBet)
     })
-    it('returns an error if act if "bet" but amount not defined', () => {
+    it('returns an error if act is "bet" but amount not defined', () => {
       const hand = new HoldEm()
       const result = hand.act({ action: 'bet' })
       expect(result.error?.message).toBe(errors.missingAmount)
     })
-    it('returns an error if act if "raise" but amount not defined', () => {
+    it('returns an error if act is "raise" but amount not defined', () => {
       const hand = new HoldEm()
       const result = hand.act({ action: 'raise' })
       expect(result.error?.message).toBe(errors.missingAmount)
@@ -324,6 +326,7 @@ describe('Hold\'em poker', () => {
     })
     it('creates multiple pots at the end of a round if players have gone all in', () => {
       const hand = new HoldEm({
+        maxRaisesPerRound: 10,
         players: [
           { purse: 10 },
           { purse: 20 },
@@ -379,20 +382,7 @@ describe('Hold\'em poker', () => {
       hand.act({ action: 'bet', amount: 10 })
       hand.act({ action: 'call' })
       hand.act({ action: 'fold' })
-      const state2 = hand.getState()
-      expect(state2.round).toBe('complete')
-      expect(state2.players[0].showdown).toEqual({
-        cards: ['KD', 'KH', 'AH', 'JS', 'XC'],
-        hand: 'pair',
-        rank: 1,
-      })
-      expect(state2.players[1].showdown).toEqual({
-        cards: ['AD', 'AH', 'KD', 'JS', 'XC'],
-        hand: 'pair',
-        rank: 0,
-      })
-      expect(state2.players[2].showdown).toBeUndefined()
-      expect(state2).toEqual({
+      expect(hand.getState()).toEqual({
         communityCards: ['AH', 'KD', '6H', 'XC', 'JS'],
         currentPlayer: 0,
         pots: [[110, 110, 100]],
@@ -424,6 +414,11 @@ describe('Hold\'em poker', () => {
           chanceToBet: true,
           currentBet: 0,
           purse: 100,
+          showdown: {
+            cards: ['AH', 'KD', 'JS', 'XC', '6H'],
+            hand: 'high-card',
+            rank: 2,
+          },
         }],
         raiseAllowed: false,
       })

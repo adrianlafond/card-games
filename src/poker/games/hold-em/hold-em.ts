@@ -144,10 +144,10 @@ export class HoldEm {
   }
 
   private processBet (amount?: number): ActionState {
-    return this.processRaise(amount)
+    return this.processRaise(amount, true)
   }
 
-  private processRaise (amount?: number): ActionState {
+  private processRaise (amount?: number, isBet?: boolean): ActionState {
     const errorResult = this.generateBetOrRaiseError(amount)
     if (errorResult != null) {
       return errorResult
@@ -163,6 +163,9 @@ export class HoldEm {
       }
     }
 
+    if (!isBet) {
+      this.state.raisesMade += 1
+    }
     currentPlayer.currentBet += requiredAmount
     currentPlayer.purse -= requiredAmount
     currentPlayer.chanceToBet = true
@@ -171,12 +174,16 @@ export class HoldEm {
   }
 
   private generateBetOrRaiseError (amount?: number): ActionState | null {
+    if (this.state.raisesMade >= this.state.maxRaisesPerRound) {
+      return this.getErrorResult({ message: errors.maxRaisesReached })
+    }
     if (amount == null) {
       return this.getErrorResult({ message: errors.missingAmount })
     }
     if (amount < this.state.minBet) {
       return this.getErrorResult({ message: errors.lessThanMinBet.replace('$1', `${this.state.minBet}`) })
-    } else if (amount > this.state.maxBet) {
+    }
+    if (amount > this.state.maxBet) {
       return this.getErrorResult({ message: errors.greaterThanMaxBet.replace('$1', `${this.state.maxBet}`) })
     }
     return null
@@ -205,7 +212,7 @@ export class HoldEm {
       this.gatherBetsIntoPots()
       if (this.state.round === 'complete') {
         const rankedHands = sortHands(...this.state.players.map(player => (
-          player.active ? [...player.cards, ...this.state.communityCards] : null
+          [...player.cards, ...this.state.communityCards]
         )))
         this.state.players.forEach((player, index) => {
           const rankedHand = rankedHands[index]
@@ -276,14 +283,6 @@ export class HoldEm {
    */
   private getHighestBet (): number {
     return Math.max(...this.state.players.map(player => player.currentBet))
-  }
-
-  /**
-   * Returns the smallest bet of the current round.
-   */
-  private getSmallestBet (): number {
-    const bets = this.state.players.filter(player => player.active && player.currentBet > 0).map(player => player.currentBet)
-    return (bets.length > 0) ? Math.min(...bets) : 0
   }
 
   /**
